@@ -1,4 +1,4 @@
-import time  # for measuring time duration of API calls
+import time  
 from openai import OpenAI
 import os
 from pydantic import BaseModel
@@ -8,22 +8,31 @@ import random
 from typing import Iterator, List
 import sounddevice as sd
 import csv
+import numpy as np
+import random
+from typing import List
+import time
+from audio_funcs import play_pcm_24000_audio, increase_pcm_volume_iterator
+import asyncio
+
 
 
 
 easy_ts = []
+
+A_ID="VGcvPRjFP4qKhICQHO7d"
+B_ID="hkfHEbBvdQFNX4uWHqRF"
+
 hard_ts = []
 
 
-ELEVEN_KEY = "sk_33dc4fbdf721579ab25f14cef5d98fc7a6398d80d5156e15"
-client = OpenAI(api_key="sk-proj-PhhD323Mh5ND26TTfclbT3BlbkFJmqGD7QRJuSl4x0BUiEEN")
+ELEVEN_KEY = "sk_d468da565c6e9130fe61a1874b0709f64245a06a28319377"
+client = OpenAI(api_key="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")
 
 eleven_client = ElevenLabs(
   api_key=ELEVEN_KEY# Defaults to ELEVEN_API_KEY
 )
 
-A_ID="VGcvPRjFP4qKhICQHO7d"
-B_ID="hkfHEbBvdQFNX4uWHqRF"
 
 class DifficultyLevel(Enum):
     EASY = "easy"
@@ -44,72 +53,16 @@ class Para(BaseModel):
 class LangResponse(BaseModel):
     paras:list[Para]
     
-import numpy as np
-
-def increase_pcm_volume_iterator(pcm_iterator: Iterator[bytes], factor: float, chunk_size: int = 4800) -> Iterator[bytes]:
-    dtype = np.dtype('<i2')  # S16LE: Signed 16-bit Little Endian
-    bytes_per_sample = 2
-    max_value = np.iinfo(np.int16).max
-
-    def process_chunk(chunk: bytes) -> bytes:
-        if not chunk:
-            print("Received empty chunk")
-            return b''
-        
-        samples = len(chunk) // bytes_per_sample
-        if samples == 0:
-            print(f"Chunk too small: {len(chunk)} bytes")
-            return chunk  
-        
-        
-        aligned_chunk = chunk[:samples * bytes_per_sample]        
-        audio_array = np.frombuffer(aligned_chunk, dtype=dtype)        
-        audio_float = audio_array.astype(np.float32)        
-        audio_float *= factor     
-        print("Multiplied by factor")   
-        np.clip(audio_float, -max_value, max_value, out=audio_float)        
-        audio_increased = audio_float.astype(dtype)
-
-        return audio_increased.tobytes()
-
-    # Process chunks
-    buffer = b''
-    for chunk in pcm_iterator:
-        buffer += chunk
-        while len(buffer) >= chunk_size:
-            yield process_chunk(buffer[:chunk_size])
-            buffer = buffer[chunk_size:]
     
-    # Process any remaining data
-    if buffer:
-        yield process_chunk(buffer)
-
-def play_pcm_24000_audio(audio_iterator: Iterator[bytes],stream):
-        print("Starting playback. Press Ctrl+C to stop.")
-        try:
-            for chunk in audio_iterator:
-                audio_chunk = np.frombuffer(chunk, dtype=np.int16)
-                stream.write(audio_chunk)
-            #stream.write(np.zeros(int(stream.samplerate * 0.5), dtype=np.int16))  
-
-        except KeyboardInterrupt:
-            print("Playback stopped by user")
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            raise e
-
-import random
-from typing import List
-import time
-import asyncio
-
+class TopicResponse(BaseModel):
+    topics:list[str]
+    
+    
 async def pre_generate_and_play_audio(list_paras: List[Para]):
     random.shuffle(list_paras)
-    assert len(list_paras) == 6, "TRY AGAIN!"
-
+    assert len(list_paras) == 10, "TRY AGAIN!"
     easy_ts = []
     hard_ts = []
-
     # Pre-generate all audio
     audio_data = []
     for para in list_paras:
@@ -122,12 +75,12 @@ async def pre_generate_and_play_audio(list_paras: List[Para]):
                 output_format="pcm_24000",
                 model="eleven_multilingual_v2",
             )
-            factor = 1 if dlg.speaker == Speaker.a else 2
-            audio = increase_pcm_volume_iterator(audio, factor=factor)
+            factor = 1 if dlg.speaker == Speaker.a else 1.5
+            audio = increase_pcm_volume_iterator(audio, factor=factor, slow_up=dlg.speaker == Speaker.a)
             para_audio.append(audio)
         audio_data.append((para, para_audio))
-
-
+        
+        
     with sd.OutputStream(samplerate=24000, channels=1, dtype='int16') as stream:
 
         # Play audio with 1s delay between paragraphs
@@ -155,169 +108,77 @@ async def pre_generate_and_play_audio(list_paras: List[Para]):
     print("Finished all paragraphs")
     return easy_ts, hard_ts
 
-
 def _create_list():
-    prompt = """
-    Please generate a structured array of 6 paragraphs in Chinese, each consisting of a dialogue between two speakers. The array should be formatted as follows:
-    {
-     "para": [
-     {
-     "dialogues": [
-     {
-     "text": "Chinese text for speaker 1",
-     "speaker": "a"
-     },
-     {
-     "text": "Chinese text for speaker 2",
-     "speaker": "b"
-     },
-     // ... more dialogue exchanges
-     ],
-     "difficulty": "easy"
-     },
-     // ... more paragraphs
-     ]
-    }
-    Requirements:
-    1. 3 paragraphs should be at HSK Level 1, marked as "difficulty": "easy". These should be commonly used and easily recognizable by beginners or intermediate learners of Chinese.
-    2. 3 paragraphs should be at HSK Level 3, marked as "difficulty": "hard". These should be more challenging and typically known by intermediate to advanced learners.
-    3. Each paragraph (dialogue exchange) should contain enough text to result in approximately 2 minutes of audio when spoken.
-    4. Alternate between speakers a and b for each line of dialogue.
-    5. Ensure that the content is appropriate and covers a variety of everyday situations and more advanced topics.
-    Here are two examples to illustrate the expected format and content:
-    Example 1 (HSK Level 1, Easy):
-    {
-     "para": [
-     {
-     "dialogues": [
-     {
-     "text": "王老师，好久不见！",
-     "speaker": "a"
-     },
-     {
-     "text": "好久不见！你也来这家饭店吃饭？",
-     "speaker": "b"
-     },
-     {
-     "text": "对，我和我的家人来吃饭。我的朋友说这里的广东菜很好吃。",
-     "speaker": "a"
-     },
-     {
-     "text": "你的爸爸妈妈也来了吗？",
-     "speaker": "b"
-     },
-     {
-     "text": "没有，他们喜欢在家吃。我的孩子们来了。那是我的老公，小孙；那个是我的大儿子，小宝，今年7岁了；这是我的小女儿，小贝，今年5岁了。",
-     "speaker": "a"
-     },
-     {
-     "text": "你们一家四口人真幸福！孩子们都上学了吗？",
-     "speaker": "b"
-     },
-     {
-     "text": "大儿子去年上小学了，小女儿明年上小学。",
-     "speaker": "a"
-     },
-     {
-     "text": "你老公也会说汉语吗？",
-     "speaker": "b"
-     },
-     {
-     "text": "哈哈，当然，他是中国人！",
-     "speaker": "a"
-     }
-     ],
-     "difficulty": "easy"
-     }
-     ]
-    }
-    Example 2 (HSK Level 3, Hard):
-    {
-     "para": [
-     {
-     "dialogues": [
-     {
-     "text": "你好，请问最近的公交车站在哪里？",
-     "speaker": "a"
-     },
-     {
-     "text": "最近的公交车站在友谊大厦。你往前走四百米，过马路，然后右转，再走三十米就能看到车站了。",
-     "speaker": "b"
-     },
-     {
-     "text": "那儿有车去豫园吗？",
-     "speaker": "a"
-     },
-     {
-     "text": "有的，你可以坐34路车直达，或者坐311路车到北京路，再转72路车。",
-     "speaker": "b"
-     },
-     {
-     "text": "要坐几个站？",
-     "speaker": "a"
-     },
-     {
-     "text": "34路要坐十个站，311路转72路一共要坐十三个站。",
-     "speaker": "b"
-     },
-     {
-     "text": "那等车大概要多久？",
-     "speaker": "a"
-     },
-     {
-     "text": "我用手机给你查查。34路还有45分钟到友谊大厦，311路要等一个小时。",
-     "speaker": "b"
-     },
-     {
-     "text": "都还要等很久呢。我坐地铁可以到豫园吗？",
-     "speaker": "a"
-     },
-     {
-     "text": "可以。你坐地铁二号线到体育馆站，再转十号线，到豫园站下。三号口出去走700米就到了。",
-     "speaker": "b"
-     },
-     {
-     "text": "地铁站离这里远不远？",
-     "speaker": "a"
-     },
-     {
-     "text": "不远，十分钟就走到了。",
-     "speaker": "b"
-     },
-     {
-     "text": "地铁站在哪儿？",
-     "speaker": "a"
-     },
-     {
-     "text": "往前走，但是不过马路，在前面的路口左拐。",
-     "speaker": "b"
-     },
-     {
-     "text": "谢谢你！",
-     "speaker": "a"
-     },
-     {
-     "text": "不客气。",
-     "speaker": "b"
-     }
-     ],
-     "difficulty": "hard"
-     }
-     ]
-    }
-    Please generate the array with 6 such paragraphs, adhering to the specified structure and requirements.
+    paras = []
+    
+    topic_prompt = f"""
+    Come up with 10 topics suitable for a 1 minute conversation
+    between 2 speakers A and B.
+    Example outputs include:
+    
+    Speaker A inviting Speaker B to dinner.
+    Speaker A accusing Speaker B of infidelity.
+     
     """
-    response =  client.beta.chat.completions.parse(
+    topic_response =  client.beta.chat.completions.parse(
         model='gpt-4o-mini',
         messages=[
-            {'role': 'user', 'content': prompt}
+            {'role': 'user', 'content': topic_prompt}
         ],
-        temperature=0,
-        response_format=LangResponse
+        temperature=0.5,
+        response_format=TopicResponse
     )
-    return response.choices[0].message.parsed.paras
+    topics = topic_response.choices[0].message.parsed.topics
+    print(topics)
+    random.shuffle(topics)
+    
+    
+    
+    for i in range(10):
+        topic = topics[i]
+        difficulty = "easy" if i < 5 else "hard"
+        hsk_level = "HSK Level 1" if difficulty == "easy" else "HSK Level 4"
+        prompt = f"""
+        Please generate a structured paragraph in Chinese, consisting of a dialogue between two speakers. The paragraph should be formatted as follows:
+        {{
+         "para": [
+         {{
+          "dialogues": [
+           {{
+            "text": "Chinese text for speaker 1",
+            "speaker": "a"
+           }},
+           {{
+            "text": "Chinese text for speaker 2",
+            "speaker": "b"
+           }},
+           // ... more dialogue exchanges
+          ],
+          "difficulty": "{difficulty}"
+         }}
+         ]
+        }}
+        Requirements:
+        1. The paragraph should be at {hsk_level}, marked as "difficulty": "{difficulty}". Only use words that are known by students of {hsk_level}
+        2. The dialogue should contain about 140 words.
+        3. Alternate between speakers a and b for each line of dialogue.
+        4. Ensure that the content is appropriate and covers everyday situations or more advanced topics, depending on the difficulty level.
+        5. For "easy" difficulty, use commonly used and easily recognizable phrases for beginners or intermediate learners of Chinese.
+        6. For "hard" difficulty, use more challenging content typically known by intermediate to advanced learners.
 
-pre_generate_and_play_audio(_create_list())
+        Please generate one such paragraph, adhering to the specified structure and requirements.
+        The topic of this paragraph should be {topic} and the level of fluency should be at {hsk_level}
+        """
+        response =  client.beta.chat.completions.parse(
+            model='gpt-4o-2024-08-06',
+            messages=[
+                {'role': 'user', 'content': prompt}
+            ],
+            temperature=0.9,
+            response_format=Para
+        )
+        paras.append(response.choices[0].message.parsed)
+    return paras
 
 def save_timestamps_to_csv(easy_ts, hard_ts, filename='paragraph_timestamps.csv'):
     # Combine easy and hard timestamps with labels
@@ -342,13 +203,11 @@ def save_timestamps_to_csv(easy_ts, hard_ts, filename='paragraph_timestamps.csv'
 
     print(f"Timestamp data has been saved to {filename}")
 
-
 async def main():
     easy_timestamps, hard_timestamps = await pre_generate_and_play_audio(_create_list())
     save_timestamps_to_csv(easy_ts=easy_timestamps, hard_ts=hard_timestamps)
 
     print("Easy timestamps:", easy_timestamps)
     print("Hard timestamps:", hard_timestamps)
-    
-    
+      
 asyncio.run(main())

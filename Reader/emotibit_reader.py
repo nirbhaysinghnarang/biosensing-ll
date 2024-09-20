@@ -1,22 +1,29 @@
+import csv
+import pandas as pd
 
+import pandas as pd
 import matplotlib.pyplot as plt
 
-file_slug = "./emotibit_run2/2024-09-18_22-46-06-359329"
-data_pts = ["EA", "EL", "PI", "PR", "PG", "T1", "HR"]
-dfs = []
+def read_emotibit(folder_location, slug):
+    data_pts = ["EA", "EL", "PI", "PR", "PG", "T1", "SA", "SR", "SF", "HR"]
+    dfs = []
 
-for pt in data_pts:
-    df = pd.read_csv(f"{file_slug}_{pt}.csv")
-    dfs.append({'type': pt, 'df': df})
+    for pt in data_pts:
+        try:
+            df = pd.read_csv(f"{folder_location}/{slug}_{pt}.csv")
+            dfs.append({'type': pt, 'df': df})
+        except FileNotFoundError:
+            print(f"Could not locate file {pt}")
+            
+        
+    return dfs
 
-
-
-def plot_emotibit_data(dfs, file_slug, difficulty_csv_path):
+    
+def plot_emotibit_data(dfs, difficulty_csv_path):
     difficulty_df = pd.read_csv(difficulty_csv_path)
 
     n_plots = len(dfs)
     fig, axes = plt.subplots(n_plots, 1, figsize=(15, 5 * n_plots), sharex=True)
-    fig.suptitle(f"EmotiBit Data: {file_slug}", fontsize=16)
 
     for i, data in enumerate(dfs):
         df = data['df']
@@ -45,12 +52,3 @@ def plot_emotibit_data(dfs, file_slug, difficulty_csv_path):
     # Use tight layout to prevent overlapping
     plt.tight_layout()
     plt.show()
-    
-
-plot_emotibit_data(dfs, file_slug, difficulty_csv_path="./paragraph_timestamps.csv")
-
-    
-    
-    
-    
-    

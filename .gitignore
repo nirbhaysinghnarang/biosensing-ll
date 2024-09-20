@@ -1,0 +1,10 @@
+**/venv/  # The bouncer is still at the door.
+**/__pycache__/  # And the ninja remains in the shadows.
+venv/
+__pycache__/
+/emotibit_parsed/
+# Now, let's add some specific guests to the "do not admit" list:
+emotibit_run1/
+emotibit_run2/
+muse-js/
+/Reader/Run*/ 
