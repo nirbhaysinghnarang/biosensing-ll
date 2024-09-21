@@ -14,23 +14,23 @@ from typing import List
 import time
 from audio_funcs import play_pcm_24000_audio, increase_pcm_volume_iterator
 import asyncio
+import os
 
+from dotenv import load_dotenv
 
 
 
 easy_ts = []
-
-A_ID="VGcvPRjFP4qKhICQHO7d"
-B_ID="hkfHEbBvdQFNX4uWHqRF"
+A_ID=os.getenv("A_ID")
+B_ID=os.getenv("B_ID")
 
 hard_ts = []
 
-
-ELEVEN_KEY = "sk_d468da565c6e9130fe61a1874b0709f64245a06a28319377"
-client = OpenAI(api_key="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")
+ELEVEN_KEY = os.getenv("ELEVEN_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_KEY"))
 
 eleven_client = ElevenLabs(
-  api_key=ELEVEN_KEY# Defaults to ELEVEN_API_KEY
+  api_key=ELEVEN_KEY
 )
 
 
