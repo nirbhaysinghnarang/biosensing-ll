@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 def read_emotibit(folder_location, slug):
-    data_pts = ["EA", "EL", "PI", "PR", "PG", "T1", "SA", "SR", "SF", "HR"]
+    data_pts = ["EA", "EL", "PI", "PR", "PG", "T1", "SF", "HR"]
     dfs = []
 
     for pt in data_pts:
