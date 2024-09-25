@@ -17,10 +17,10 @@ class Evaluator:
         
         
     def run(self):
-        self._evaluate_logistic_regression()
-        self._evaluate_random_forest()
-        self._evaluate_xgboost_hinge()
-        self._evaluate_xgboost_log()
+        # self._evaluate_logistic_regression()
+        # self._evaluate_random_forest()
+        # self._evaluate_xgboost_hinge()
+        self._evaluate_xgboost_log_split()
         
         
         
@@ -118,3 +118,48 @@ class Evaluator:
         print(f"\nLOOCV Accuracy with XGBoost: {xgb_accuracy:.2f}")
         print("\nClassification Report with XGBoost:")
         print(classification_report(self.y, xgb_predictions, target_names=['Easy', 'Hard']))
+
+
+    def _evaluate_xgboost_log_split(self):
+        print("\nLabels:")
+        print(self.y)
+
+        # Create a LabelEncoder to transform [-1, 1] to [0, 1]
+        le = LabelEncoder()
+        y_encoded = le.fit_transform(self.y)
+
+        # Splitting the data into training and testing sets with an 80/20 split
+        from sklearn.model_selection import train_test_split
+        X_train, X_test, y_train, y_test = train_test_split(
+            self.X, y_encoded, test_size=0.2, random_state=42
+        )
+
+        xgb_model = XGBClassifier(
+            eval_metric='logloss',
+            verbosity=1,
+            objective="binary:logistic",
+            random_state=42,
+            base_score=0.5,
+            max_depth=2,
+            n_estimators=10,
+            learning_rate=0.1,
+            min_child_weight=2
+        )
+
+        # Fitting the model and making predictions
+        xgb_model.fit(X_train, y_train)
+        predictions = xgb_model.predict(X_test)
+        probabilities = xgb_model.predict_proba(X_test)[:, 1]  # Probability of positive class
+
+        # Transforming predictions back to original class labels
+        predictions_transformed = le.inverse_transform(predictions)
+
+        # Printing out each prediction with its probability
+        for pred, prob in zip(predictions_transformed, probabilities):
+            print(f"Prediction: {pred}, Probability: {prob:.2f}")
+
+        # Evaluating the model
+        accuracy = accuracy_score(y_test, predictions)
+        print(f"\nAccuracy with XGBoost: {accuracy:.2f}")
+        print("\nClassification Report with XGBoost:")
+        print(classification_report(y_test, predictions, target_names=['Easy', 'Hard']))
