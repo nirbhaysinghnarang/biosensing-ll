@@ -196,6 +196,54 @@ def read_fixations(folder_location):
             
     return {"fixations":topics, "offset":OFFSET} 
         
+        
+def read_gaze(folder_location):
+    pupil_data = os.path.join(folder_location, 'gaze.pldata')
+    metadata_path = os.path.join(folder_location, "info.player.json")
+    with open(metadata_path, 'r') as file:
+        metadata = json.load(file)
+    topics = collections.deque()
+    with open(pupil_data, "rb") as f:
+        unpacker = msgpack.Unpacker(f, raw=False, use_list=False)
+        for _, payload in unpacker:
+            unpacked = serialized_dict_to_dict(Serialized_Dict(msgpack_bytes=payload))
+            
+            topics.append(unpacked)   
+    print(topics[0])
+    SYSTEM_START_TIME = metadata["start_time_system_s"]
+    PUPIL_LABS_START_TIME = metadata["start_time_synced_s"]
+    OFFSET = SYSTEM_START_TIME - PUPIL_LABS_START_TIME
+            
+    return {"gaze":topics, "offset":OFFSET} 
+
+
+def read_blinks(folder_location):
+    pupil_data = os.path.join(folder_location, 'blinks.pldata')
+    metadata_path = os.path.join(folder_location, "info.player.json")
+    with open(metadata_path, 'r') as file:
+        metadata = json.load(file)
+    topics = collections.deque()
+    with open(pupil_data, "rb") as f:
+        unpacker = msgpack.Unpacker(f, raw=False, use_list=False)
+        for _, payload in unpacker:
+            unpacked = serialized_dict_to_dict(Serialized_Dict(msgpack_bytes=payload))
+            
+            topics.append(unpacked)   
+    #either onset or offset
+    # topic_types = (
+    #     set(
+    #         [topic['type'] for topic in topics]
+    #     )
+    # )
+    
+    SYSTEM_START_TIME = metadata["start_time_system_s"]
+    PUPIL_LABS_START_TIME = metadata["start_time_synced_s"]
+    OFFSET = SYSTEM_START_TIME - PUPIL_LABS_START_TIME
+            
+    return {"blinks":topics, "offset":OFFSET} 
+
+
+        
 
 def read_pupils(folder_location):
 
@@ -205,18 +253,14 @@ def read_pupils(folder_location):
     
     metadata_path = os.path.join(folder_location, "info.player.json")
     with open(metadata_path, 'r') as file:
-        metadata = json.load(file)
-        
-        
-    
-  
-    
+        metadata = json.load(file)    
     topics = collections.deque()
     with open(pupil_data, "rb") as f:
         unpacker = msgpack.Unpacker(f, raw=False, use_list=False)
         for _, payload in unpacker:
             unpacked = serialized_dict_to_dict(Serialized_Dict(msgpack_bytes=payload))
             topics.append(unpacked)    
+        
         
         
     calculate_velocity_acceleration(recordings=topics)
@@ -231,9 +275,7 @@ def calculate_velocity_acceleration(recordings: List[Serialized_Dict]) -> None:
     sorted_recordings = sorted(recordings, key=lambda x: x['timestamp'])
     
     for i in range(len(sorted_recordings)):
-        current = sorted_recordings[i]
-        
-        # Initialize new fields
+        current = sorted_recordings[i]        
         current['velocity'] = (0.0, 0.0)
         current['acceleration'] = (0.0, 0.0)
         

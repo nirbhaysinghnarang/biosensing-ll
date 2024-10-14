@@ -6,15 +6,12 @@ from sklearn.impute import SimpleImputer
 import matplotlib.pyplot as plt
 import os
 
-# Import your custom modules here
 from muse_reader import read_muse
 from pupil_reader import read_pupils, read_fixations
 from emotibit_reader import read_emotibit
 from evaluator import Evaluator
-
 from reader import process_eeg, process_emotibit, process_eyetracking, read_time_windows, calculate_psd
-# Include all the processing functions from your original script here
-# (calculate_psd, process_eeg, process_emotibit, process_eyetracking, read_time_windows)
+
 
 def read_all_data(input_list):
     all_muse_data = []
@@ -52,11 +49,8 @@ def process_collated_data(all_muse_data, all_pupil_data, all_emotibit_data, all_
         
         print(f"Processing dataset {i+1}")
         eeg_features = process_eeg(muse_data, time_windows)
-        print(len(eeg_features))
         emotibit_features = process_emotibit(emotibit_data, time_windows)
-        print(len(emotibit_features))
         eyetracking_features = process_eyetracking(pupil_data, time_windows, fixations_data=fixations_data)
-        print(len(eyetracking_features))
 
         all_eeg_features.append(eeg_features)
         all_emotibit_features.append(emotibit_features)
@@ -127,12 +121,12 @@ def run_collated_analysis(input_list, output_folder):
 
 if __name__ == "__main__":
     input_list = [
-        ("./Run3", "muse_data.csv", "000", "emotibit", "2024-09-19_17-35-40-922208"),
-        ("./Run4", "muse_data.csv", "000", "emotibit","2024-09-19_21-38-59-706080"),
-        
-        
-        
-        # Add more input tuples here for additional runs
+        # ("./Run3", "muse_data.csv", "000", "emotibit", "2024-09-19_17-35-40-922208"),
+        # ("./Run4", "muse_data.csv", "000", "emotibit","2024-09-19_21-38-59-706080"),
+        ("./Run5", "muse_data.csv", "000", "emotibit", "2024-10-02_12-36-47-751303"),
+        ("./Run6", "muse_data.csv", "000", "emotibit","2024-10-11_17-47-15-117561"),
+        ("./Run7", "muse_data.csv", "000", "emotibit", "2024-10-08_17-49-37-608268"),
+        ("./Run8", "muse_data.csv", "000", "emotibit", "2024-10-04_11-46-56-629614")        
     ]
     output_folder = "./CollatedResults"
     os.makedirs(output_folder, exist_ok=True)

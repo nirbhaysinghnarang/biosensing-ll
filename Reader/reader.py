@@ -134,35 +134,100 @@ def process_emotibit(emotibit_data, time_windows):
         
         features.append(window_features)
     return np.array(features)
+import numpy as np
 
-def process_eyetracking(pupil_data, time_windows, fixations_data=None):
+def process_eyetracking(
+    pupil_data,
+    time_windows,
+    fixations_data=None,
+    blinks_data=None
+    ):
     features = []
     OFFSET = pupil_data["offset"]
     pupil_data = pupil_data["data"]
-    print("TW",len(time_windows), time_windows)
+    
+    SACCADE_VELOCITY_THRESHOLD = 30 
+
+    # Pre-process blinks data to pair onset and offset events
+    blink_pairs = []
+    if blinks_data is not None:
+        onset = None
+        for blink in blinks_data:
+            if blink['type'] == 'onset':
+                onset = blink
+            elif blink['type'] == 'offset' and onset is not None:
+                blink_pairs.append((onset['timestamp'], blink['timestamp']))
+                onset = None
+
     for start, end in time_windows:
         window_data = [datum for datum in pupil_data if (datum['timestamp'] + OFFSET >= start) and (datum['timestamp'] + OFFSET <= end)]
         
         if window_data:
-            avg_dilation = np.mean([datum['diameter'] for datum in window_data])
-            avg_speed = np.mean([datum['velocity'] for datum in window_data])
-            avg_acc = np.mean([datum['acceleration'] for datum in window_data])
-        else:
-            avg_dilation = np.nan
-            avg_speed = np.nan
-            avg_acc = np.nan
+            timestamps = np.array([datum['timestamp'] for datum in window_data])
+            diameters = np.array([datum['diameter'] for datum in window_data])
+            velocities = np.array([datum['velocity'] for datum in window_data])
 
-        # Count fixations in the current time window
+            avg_dilation = np.mean(diameters)
+            avg_speed = np.mean(velocities)
+
+            # Detect saccades
+            saccade_indices = np.where(velocities > SACCADE_VELOCITY_THRESHOLD)[0]
+            saccade_count = len(saccade_indices)
+
+            # Calculate saccade features
+            if saccade_count > 0:
+                avg_saccade_velocity = np.mean(velocities[saccade_indices])
+                max_saccade_velocity = np.max(velocities[saccade_indices])
+            else:
+                avg_saccade_velocity = max_saccade_velocity = np.nan
+        else:
+            avg_dilation = avg_speed = saccade_count = avg_saccade_velocity = max_saccade_velocity = np.nan
+
+        # Process fixations
         fixation_count = 0
+        fixation_durations = []
         if fixations_data is not None:
             for fixation in fixations_data:
                 fixation_start = fixation['timestamp'] + OFFSET
                 fixation_end = fixation_start + fixation['duration'] / 1000.0  # Convert duration to seconds
                 if (fixation_start >= start and fixation_start <= end) or (fixation_end >= start and fixation_end <= end):
                     fixation_count += 1
-        print([avg_dilation, avg_speed, fixation_count])
-        features.append([fixation_count, avg_dilation, avg_speed])
+                    fixation_durations.append(fixation['duration'] / 1000.0)  # Store duration in seconds
 
+            avg_fixation_duration = np.mean(fixation_durations) if fixation_durations else np.nan
+            max_fixation_duration = np.max(fixation_durations) if fixation_durations else np.nan
+            min_fixation_duration = np.min(fixation_durations) if fixation_durations else np.nan
+        else:
+            avg_fixation_duration = max_fixation_duration = min_fixation_duration = np.nan
+
+        # Process blinks
+        blink_count = 0
+        blink_durations = []
+        for blink_start, blink_end in blink_pairs:
+            blink_start += OFFSET
+            blink_end += OFFSET
+            if (blink_start >= start and blink_start <= end) or (blink_end >= start and blink_end <= end):
+                blink_count += 1
+                blink_duration = blink_end - blink_start
+                blink_durations.append(blink_duration)
+
+        avg_blink_duration = np.mean(blink_durations) if blink_durations else np.nan
+        max_blink_duration = np.max(blink_durations) if blink_durations else np.nan
+
+        features.append([
+            fixation_count, 
+            avg_dilation, 
+            avg_speed,
+            avg_fixation_duration, 
+            max_fixation_duration,
+            min_fixation_duration,
+            saccade_count, 
+            avg_saccade_velocity,
+            max_saccade_velocity,
+            blink_count,
+            avg_blink_duration,
+            max_blink_duration
+        ])
     return np.array(features)
 
 def read_time_windows(file_path):
